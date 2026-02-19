@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { AppData, Category, Lecturer, QuestionType, Submission } from '../types';
 import { getAppData, updateCategories, updateLecturers, deleteSubmission } from '../services/storageService';
 import { FACULTIES } from '../constants';
-import { Settings, BarChart3, Users, BookOpen, LogOut, Plus, Trash2, Save, Loader2, Download, Upload, FileSpreadsheet, AlertTriangle, X, List, AlignLeft, CheckSquare, Search, Eye, FileText, Calendar } from 'lucide-react';
+import { Settings, BarChart3, Users, BookOpen, LogOut, Plus, Trash2, Save, Loader2, Download, Upload, FileSpreadsheet, AlertTriangle, X, List, AlignLeft, CheckSquare, Search, Eye, FileText, Calendar, Filter, MessageSquare } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface AdminDashboardProps {
@@ -34,6 +34,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
 
+  // State for Analytics Tab (Visualisasi)
+  const [selectedQuestionId, setSelectedQuestionId] = useState<string>('');
+
   // Ref for file input
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -57,10 +60,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     setEditedCategories(d.categories);
     setEditedLecturers(d.lecturers);
 
-    // If data is populated, default to analytics, otherwise stay on setup
+    // Default tab logic
     if (d.submissions.length > 0) {
         setActiveTab('analytics');
     }
+    
+    // Set default selected question for analytics
+    if (d.categories.length > 0 && d.categories[0].questions.length > 0) {
+        setSelectedQuestionId(d.categories[0].questions[0].id);
+    }
+
     setIsLoading(false);
   };
 
@@ -299,50 +308,79 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     setEditedCategories(newCats);
   };
 
-  // --- Analytics Helpers ---
-  const calculateStats = () => {
-    if (!data || data.submissions.length === 0) return { categoryStats: [], sentimentStats: [] };
+  // --- Analysis Logic ---
+  const getQuestionAnalysis = useMemo(() => {
+    if (!data || !selectedQuestionId) return null;
 
-    const categoryStats = data.categories.map(cat => {
-      let totalScore = 0;
-      let count = 0;
-      data.submissions.forEach(sub => {
-        cat.questions.forEach(q => {
-          // Only count numeric ratings (likert) for the bar chart
-          const val = sub.answers[q.id];
-          if (typeof val === 'number') {
-            totalScore += val;
-            count++;
-          } else if (typeof val === 'string' && !isNaN(parseInt(val)) && q.type === 'likert') {
-            totalScore += parseInt(val);
-            count++;
-          }
-        });
-      });
-      return {
-        name: cat.title.split(' ')[1] || cat.title.substring(0, 10), 
-        fullName: cat.title,
-        avg: count > 0 ? Number((totalScore / count).toFixed(2)) : 0
-      };
-    });
-
-    // Simple sentiment logic mock since we removed AI
-    let positive = 0;
-    let constructive = 0;
+    // 1. Find the question object
+    let question: any = null;
+    let categoryTitle = '';
     
-    data.submissions.forEach(sub => {
-        // Just length based check for basic visualization
-        if (sub.positiveFeedback.length > 5) positive++;
-        if (sub.constructiveFeedback.length > 5) constructive++;
-    });
+    for (const cat of data.categories) {
+        const q = cat.questions.find(fq => fq.id === selectedQuestionId);
+        if (q) {
+            question = q;
+            categoryTitle = cat.title;
+            break;
+        }
+    }
 
-    const sentimentStats = [
-      { name: 'Catatan Positif', value: positive },
-      { name: 'Kendala/Hambatan', value: constructive }
-    ];
+    if (!question) return null;
 
-    return { categoryStats, sentimentStats };
-  };
+    // 2. Process Submissions for this question
+    const answers = data.submissions
+        .map(sub => sub.answers[selectedQuestionId])
+        .filter(val => val !== undefined && val !== null && val !== '');
+
+    const totalResponses = answers.length;
+
+    // 3. Prepare Data based on Type
+    let chartData = [];
+    let stats = { avg: 0 };
+    
+    if (question.type === 'likert' || !question.type) {
+        const counts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        let sum = 0;
+        let count = 0;
+
+        answers.forEach(val => {
+            const num = Number(val);
+            if (!isNaN(num) && num >= 1 && num <= 5) {
+                counts[num] = (counts[num] || 0) + 1;
+                sum += num;
+                count++;
+            }
+        });
+
+        stats.avg = count > 0 ? Number((sum / count).toFixed(2)) : 0;
+        
+        const labels = ["", "Sangat Kurang", "Kurang", "Cukup", "Baik", "Sangat Baik"];
+        chartData = [1, 2, 3, 4, 5].map(score => ({
+            name: labels[score],
+            score: score,
+            value: counts[score] || 0
+        }));
+    
+    } else if (question.type === 'choice') {
+        const counts: Record<string, number> = {};
+        answers.forEach(val => {
+            const str = String(val);
+            counts[str] = (counts[str] || 0) + 1;
+        });
+        
+        chartData = Object.keys(counts).map(key => ({
+            name: key,
+            value: counts[key]
+        }));
+    } else {
+        // Text type just returns raw answers
+        chartData = answers.map(a => ({ text: String(a) }));
+    }
+
+    return { question, categoryTitle, chartData, stats, totalResponses };
+
+  }, [data, selectedQuestionId]);
+
 
   if (isLoading || !data) {
       return (
@@ -352,10 +390,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
       );
   }
 
-  const { categoryStats, sentimentStats } = calculateStats();
-  const COLORS = ['#002060', '#FFC000', '#00C49F', '#FF8042'];
+  const COLORS = ['#002060', '#FFC000', '#00C49F', '#FF8042', '#8884d8', '#ffc658'];
   
-  // Filter submissions
+  // Filter submissions for Results Tab
   const filteredSubmissions = data.submissions.filter(s => 
     s.lecturerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.nip.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -529,7 +566,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
       <main className="max-w-6xl mx-auto px-4 py-8">
         
-        {/* --- ANALYTICS TAB --- */}
+        {/* --- ANALYTICS TAB (UPDATED) --- */}
         {activeTab === 'analytics' && (
             <div className="space-y-6 animate-in fade-in duration-300">
                 {data.submissions.length === 0 ? (
@@ -540,65 +577,158 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     </div>
                 ) : (
                     <>
-                        {/* Summary Cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                                <p className="text-slate-500 text-sm font-medium">Total Responden</p>
-                                <p className="text-3xl font-bold text-unair-blue">{data.submissions.length}</p>
-                            </div>
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                                <p className="text-slate-500 text-sm font-medium">Rata-rata Skor (Likert)</p>
-                                <p className="text-3xl font-bold text-unair-yellow">
-                                    {categoryStats.length > 0 
-                                        ? (categoryStats.reduce((a, b) => a + b.avg, 0) / categoryStats.length).toFixed(2) 
-                                        : '0.00'}
-                                </p>
-                            </div>
+                        {/* 1. Filter Section */}
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                             <div className="flex items-center gap-2 mb-2 text-slate-700 font-bold">
+                                <Filter size={18} className="text-unair-blue" />
+                                Pilih Pertanyaan untuk Dianalisis
+                             </div>
+                             <select 
+                                className="w-full p-3 border border-slate-300 rounded-lg bg-slate-50 focus:ring-2 focus:ring-unair-blue outline-none"
+                                value={selectedQuestionId}
+                                onChange={(e) => setSelectedQuestionId(e.target.value)}
+                             >
+                                 {data.categories.map(cat => (
+                                     <optgroup key={cat.id} label={cat.title}>
+                                         {cat.questions.map(q => (
+                                             <option key={q.id} value={q.id}>
+                                                 {q.text.length > 100 ? q.text.substring(0, 100) + '...' : q.text}
+                                             </option>
+                                         ))}
+                                     </optgroup>
+                                 ))}
+                             </select>
                         </div>
 
-                        {/* Charts */}
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                                <h3 className="text-lg font-bold text-slate-800 mb-4">Rata-rata Kompetensi</h3>
-                                <div className="h-[300px] w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={categoryStats} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis dataKey="name" />
-                                            <YAxis domain={[0, 5]} />
-                                            <Tooltip />
-                                            <Bar dataKey="avg" fill="#002060" name="Skor Rata-rata" radius={[4, 4, 0, 0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
-                                </div>
-                            </div>
+                        {/* 2. Analysis Content */}
+                        {getQuestionAnalysis ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                {/* Left: Info Card */}
+                                <div className="lg:col-span-1 space-y-4">
+                                    <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-unair-blue">
+                                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">Kategori</p>
+                                        <p className="font-semibold text-slate-700 mb-4">{getQuestionAnalysis.categoryTitle}</p>
+                                        
+                                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">Pertanyaan</p>
+                                        <p className="font-bold text-slate-800 text-lg leading-snug">
+                                            {getQuestionAnalysis.question.text}
+                                        </p>
+                                    </div>
+                                    
+                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
+                                         <p className="text-slate-500 font-medium mb-2">Total Responden</p>
+                                         <p className="text-4xl font-bold text-slate-800">{getQuestionAnalysis.totalResponses}</p>
+                                    </div>
 
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                                <h3 className="text-lg font-bold text-slate-800 mb-4">Tren Umpan Balik</h3>
-                                <div className="h-[300px] w-full flex justify-center">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
-                                            <Pie
-                                                data={sentimentStats}
-                                                cx="50%"
-                                                cy="50%"
-                                                innerRadius={60}
-                                                outerRadius={100}
-                                                fill="#8884d8"
-                                                paddingAngle={5}
-                                                dataKey="value"
-                                            >
-                                                {sentimentStats.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                                ))}
-                                            </Pie>
-                                            <Tooltip />
-                                            <Legend verticalAlign="bottom" height={36}/>
-                                        </PieChart>
-                                    </ResponsiveContainer>
+                                    {/* Show Average only for Likert */}
+                                    {(getQuestionAnalysis.question.type === 'likert' || !getQuestionAnalysis.question.type) && (
+                                         <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col items-center justify-center text-center">
+                                            <p className="text-slate-500 font-medium mb-2">Rata-rata Skor</p>
+                                            <div className="text-4xl font-bold text-unair-yellow flex items-center gap-2">
+                                                {getQuestionAnalysis.stats.avg} 
+                                                <span className="text-base text-slate-400 font-normal">/ 5.0</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Right: Chart / List */}
+                                <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200 min-h-[400px]">
+                                    
+                                    {/* LIKERT: Bar Chart */}
+                                    {(getQuestionAnalysis.question.type === 'likert' || !getQuestionAnalysis.question.type) && (
+                                        <>
+                                            <h3 className="font-bold text-slate-700 mb-6 flex items-center gap-2">
+                                                <BarChart3 size={20} className="text-unair-blue"/>
+                                                Distribusi Jawaban
+                                            </h3>
+                                            <div className="h-[300px] w-full">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart 
+                                                        data={getQuestionAnalysis.chartData} 
+                                                        layout="vertical" 
+                                                        margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
+                                                    >
+                                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                                        <XAxis type="number" allowDecimals={false} />
+                                                        <YAxis dataKey="name" type="category" width={100} style={{ fontSize: '12px', fontWeight: 500 }} />
+                                                        <Tooltip 
+                                                            cursor={{fill: 'transparent'}}
+                                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                        />
+                                                        <Bar dataKey="value" fill="#002060" radius={[0, 4, 4, 0]} barSize={30}>
+                                                            {/* Optional: Color based on score */}
+                                                        </Bar>
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {/* CHOICE: Pie Chart */}
+                                    {getQuestionAnalysis.question.type === 'choice' && (
+                                        <>
+                                            <h3 className="font-bold text-slate-700 mb-6 flex items-center gap-2">
+                                                <BarChart3 size={20} className="text-unair-blue"/>
+                                                Persentase Jawaban
+                                            </h3>
+                                            <div className="h-[300px] w-full flex justify-center">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <PieChart>
+                                                        <Pie
+                                                            data={getQuestionAnalysis.chartData}
+                                                            cx="50%"
+                                                            cy="50%"
+                                                            innerRadius={60}
+                                                            outerRadius={100}
+                                                            paddingAngle={5}
+                                                            dataKey="value"
+                                                            label={({ name, percent }) => `${(percent * 100).toFixed(0)}%`}
+                                                        >
+                                                            {getQuestionAnalysis.chartData.map((entry: any, index: number) => (
+                                                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                            ))}
+                                                        </Pie>
+                                                        <Tooltip />
+                                                        <Legend verticalAlign="bottom" height={36}/>
+                                                    </PieChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {/* TEXT: List View */}
+                                    {getQuestionAnalysis.question.type === 'text' && (
+                                        <>
+                                            <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2">
+                                                <MessageSquare size={20} className="text-unair-blue"/>
+                                                Daftar Jawaban Responden
+                                            </h3>
+                                            <div className="bg-slate-50 rounded-lg border border-slate-200 max-h-[400px] overflow-y-auto p-2">
+                                                {getQuestionAnalysis.chartData.length > 0 ? (
+                                                    <ul className="space-y-2">
+                                                        {getQuestionAnalysis.chartData.map((item: any, idx: number) => (
+                                                            <li key={idx} className="bg-white p-3 rounded shadow-sm border border-slate-100 text-sm text-slate-700">
+                                                                "{item.text}"
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                ) : (
+                                                    <div className="text-center py-8 text-slate-400 italic">
+                                                        Belum ada jawaban teks.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </>
+                                    )}
+
                                 </div>
                             </div>
-                        </div>
+                        ) : (
+                            <div className="p-8 text-center text-slate-500">
+                                Pilih pertanyaan di atas untuk melihat analisis detail.
+                            </div>
+                        )}
                     </>
                 )}
             </div>

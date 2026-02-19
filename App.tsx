@@ -12,9 +12,9 @@ import { Send, AlertCircle, Info, Settings, ShieldAlert, LogOut, Loader2 } from 
 const INITIAL_FORM: FormData = {
   nip: '',
   lecturerName: '',
-  subject: '',
+  subject: 'Pembelajaran Dasar Bersama (PDB)', // Default hardcoded
   classCode: '',
-  semester: SEMESTERS[0],
+  semester: SEMESTERS[0], // Default hardcoded
   answers: {}, 
   positiveFeedback: '',
   constructiveFeedback: ''
@@ -41,8 +41,8 @@ function App() {
         setAppData(data);
         setIsLoading(false);
         
-        // Auto-select subject if only 1 exists
-        if (data.subjects.length === 1 && view === 'form') {
+        // Ensure subject matches API data if available
+        if (data.subjects.length > 0) {
             setFormData(prev => ({ ...prev, subject: data.subjects[0].name }));
         }
     };
@@ -231,7 +231,7 @@ function App() {
                 </h3>
                 
                 {/* STATIC INFO: Name, NIP, Faculty */}
-                <div className="bg-slate-50 rounded-lg border border-slate-200 p-4 mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-slate-50 rounded-lg border border-slate-200 p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="md:col-span-1">
                         <p className="text-xs font-bold text-slate-500 uppercase mb-1">Nama Dosen</p>
                         <p className="font-bold text-slate-800 text-sm sm:text-base">{formData.lecturerName}</p>
@@ -244,34 +244,6 @@ function App() {
                         <p className="text-xs font-bold text-slate-500 uppercase mb-1">Fakultas</p>
                         <p className="font-medium text-slate-700 text-sm sm:text-base">{lecturerDepartment || '-'}</p>
                     </div>
-                </div>
-
-                {/* Course Inputs */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">Mata Kuliah</label>
-                    <select 
-                      className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
-                      value={formData.subject}
-                      onChange={(e) => handleInputChange('subject', e.target.value)}
-                    >
-                      <option value="">-- Pilih Mata Kuliah --</option>
-                      {appData.subjects.map(s => (
-                        <option key={s.id} value={s.name}>{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold text-slate-700 mb-2">Semester</label>
-                    <select 
-                      className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
-                      value={formData.semester}
-                      onChange={(e) => handleInputChange('semester', e.target.value)}
-                    >
-                      {SEMESTERS.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
                 </div>
               </section>
 
@@ -305,8 +277,6 @@ function App() {
                   </div>
                 ))}
               </section>
-
-              {/* Section Feedback Kualitatif Removed */}
 
               <div className="sticky bottom-4 z-40 bg-white/80 backdrop-blur-md p-4 rounded-xl shadow-lg border border-slate-200 flex justify-end">
                 <button
