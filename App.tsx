@@ -53,6 +53,15 @@ function App() {
   // --- Handlers ---
 
   const handleLecturerLogin = (nip: string, lecturerName?: string, department?: string) => {
+    // Check if lecturer has already submitted
+    if (appData?.submissions) {
+        const hasSubmitted = appData.submissions.some(s => s.nip === nip);
+        if (hasSubmitted) {
+            alert("Anda sudah mengisi kuesioner ini sebelumnya. Terima kasih atas partisipasi Anda.");
+            return;
+        }
+    }
+
     setFormData(prev => ({ 
         ...prev, 
         nip,

@@ -1,19 +1,18 @@
 import { AppData, Submission, Category, Lecturer, Subject } from '../types';
 import { MOCK_LECTURERS, SUBJECTS, QUESTION_CATEGORIES } from '../constants';
 
-// Production API URL - Integrated
-const API_URL = 'https://pkkii.pendidikan.unair.ac.id/monev/api.php'; 
+// --- API Configuration ---
+export const getApiUrl = () => {
+  return localStorage.getItem('MONEV_API_URL') || '/api';
+};
 
-// Fallback data if API fails or for initial state
-const INITIAL_DATA: AppData = {
-  lecturers: MOCK_LECTURERS,
-  subjects: SUBJECTS,
-  categories: QUESTION_CATEGORIES,
-  submissions: []
+export const setApiUrl = (url: string) => {
+  localStorage.setItem('MONEV_API_URL', url);
 };
 
 // --- Helper for Fetching ---
 const apiFetch = async (action: string, method: 'GET' | 'POST' = 'GET', body?: any) => {
+  const baseUrl = getApiUrl();
   try {
     const options: RequestInit = {
       method,
@@ -21,7 +20,7 @@ const apiFetch = async (action: string, method: 'GET' | 'POST' = 'GET', body?: a
     };
     if (body) options.body = JSON.stringify(body);
 
-    const res = await fetch(`${API_URL}?action=${action}`, options);
+    const res = await fetch(`${baseUrl}?action=${action}`, options);
     
     // Robustness Check: Ensure response is actually JSON (catch PHP HTML errors)
     const contentType = res.headers.get("content-type");
