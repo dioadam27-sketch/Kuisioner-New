@@ -13,8 +13,9 @@ const INITIAL_FORM: FormData = {
   nip: '',
   lecturerName: '',
   subject: 'Pembelajaran Dasar Bersama (PDB)', // Default hardcoded
-  classCode: '',
-  semester: SEMESTERS[0], // Default hardcoded
+  classCode: '-', // Default for curriculum evaluation
+  semester: 'Evaluasi Kurikulum', // Default for curriculum evaluation
+  categoryId: '',
   answers: {}, 
   positiveFeedback: '',
   constructiveFeedback: ''
@@ -33,6 +34,9 @@ function App() {
 
   // Local state for displaying faculty (not saved in submission)
   const [lecturerDepartment, setLecturerDepartment] = useState('');
+
+  // State for category selection
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -53,15 +57,6 @@ function App() {
   // --- Handlers ---
 
   const handleLecturerLogin = (nip: string, lecturerName?: string, department?: string) => {
-    // Check if lecturer has already submitted
-    if (appData?.submissions) {
-        const hasSubmitted = appData.submissions.some(s => s.nip === nip);
-        if (hasSubmitted) {
-            alert("Anda sudah mengisi kuesioner ini sebelumnya. Terima kasih atas partisipasi Anda.");
-            return;
-        }
-    }
-
     setFormData(prev => ({ 
         ...prev, 
         nip,
@@ -70,10 +65,30 @@ function App() {
     }));
     setLecturerDepartment(department || '');
     setView('form');
+    setActiveCategory(null); // Reset category selection
   };
 
   const handleAdminLogin = () => {
     setView('admin-dashboard');
+  };
+
+  const handleCategorySelect = (categoryId: string) => {
+    // Check if already submitted for this category (Only check NIP + Category)
+    if (appData?.submissions) {
+        const isDuplicate = appData.submissions.some(s => 
+            s.nip === formData.nip && 
+            s.categoryId === categoryId
+        );
+        
+        if (isDuplicate) {
+            alert(`Anda sudah mengisi evaluasi untuk kategori ini.`);
+            return;
+        }
+    }
+
+    setFormData(prev => ({ ...prev, categoryId }));
+    setActiveCategory(categoryId);
+    window.scrollTo(0, 0);
   };
 
   const handleAnswerChange = (id: string, val: string | number) => {
@@ -91,14 +106,31 @@ function App() {
     const newErrors: string[] = [];
     if (!formData.lecturerName) newErrors.push("Silakan pilih Nama Dosen (Diri Sendiri).");
     if (!formData.subject) newErrors.push("Silakan pilih Mata Kuliah yang diampu.");
+    // Removed ClassCode and Semester checks
+    if (!formData.categoryId) newErrors.push("Silakan pilih Kategori Kuesioner.");
     
-    // Check if all questions are answered
-    if (appData) {
-        const totalQuestions = appData.categories.reduce((acc, cat) => acc + cat.questions.length, 0);
-        const answeredQuestions = Object.keys(formData.answers).length;
+    // Check for duplicate submission (NIP + Category)
+    if (appData?.submissions) {
+        const isDuplicate = appData.submissions.some(s => 
+            s.nip === formData.nip && 
+            s.categoryId === formData.categoryId
+        );
         
-        if (answeredQuestions < totalQuestions) {
-             newErrors.push(`Harap lengkapi semua pertanyaan (${answeredQuestions}/${totalQuestions} terisi).`);
+        if (isDuplicate) {
+            newErrors.push(`Anda sudah mengisi evaluasi untuk kategori ini.`);
+        }
+    }
+
+    // Check if all questions in CURRENT CATEGORY are answered
+    if (appData && activeCategory) {
+        const currentCat = appData.categories.find(c => c.id === activeCategory);
+        if (currentCat) {
+            const totalQuestions = currentCat.questions.length;
+            const answeredQuestions = currentCat.questions.filter(q => formData.answers[q.id]).length;
+            
+            if (answeredQuestions < totalQuestions) {
+                 newErrors.push(`Harap lengkapi semua pertanyaan (${answeredQuestions}/${totalQuestions} terisi).`);
+            }
         }
     }
     
@@ -121,6 +153,7 @@ function App() {
     setFormData(INITIAL_FORM);
     setView('landing'); 
     setErrors([]);
+    setActiveCategory(null);
     window.scrollTo(0, 0);
   };
 
@@ -254,48 +287,101 @@ function App() {
                         <p className="font-medium text-slate-700 text-sm sm:text-base">{lecturerDepartment || '-'}</p>
                     </div>
                 </div>
+
+                {/* Dynamic Inputs: Class Code & Semester REMOVED */}
+                
               </section>
 
-              {/* Section 2...N: Penilaian Dinamis */}
+              {/* Section 2: Category Selection or Questions */}
               <section className="space-y-6">
-                <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg flex gap-3">
-                    <Info className="text-unair-blue shrink-0" size={20} />
-                    <p className="text-sm text-blue-900">
-                        Isilah kuesioner berikut sesuai dengan kondisi yang sebenarnya.
-                    </p>
-                </div>
+                {!activeCategory ? (
+                    <div className="bg-white rounded-xl shadow-sm p-6 sm:p-8">
+                        <h3 className="text-lg font-bold text-unair-blue border-b pb-4 mb-6 flex items-center gap-2">
+                            <span className="bg-unair-blue text-white w-6 h-6 rounded flex items-center justify-center text-xs">2</span>
+                            Pilih Kategori Evaluasi
+                        </h3>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {appData.categories.map((cat) => {
+                                // Check status (NIP + Category only)
+                                const isDone = appData.submissions.some(s => 
+                                    s.nip === formData.nip && 
+                                    s.categoryId === cat.id
+                                );
 
-                {appData.categories.map((category, idx) => (
-                  <div key={category.id} className="bg-white rounded-xl shadow-sm p-6 sm:p-8">
-                    <h3 className="text-lg font-bold text-unair-blue border-b pb-2 mb-2 flex items-center gap-2">
-                        <span className="bg-unair-blue text-white w-6 h-6 rounded flex items-center justify-center text-xs">{idx + 2}</span>
-                        {category.title}
-                    </h3>
-                    <p className="text-slate-500 text-sm mb-6">{category.description}</p>
-                    
-                    <div className="space-y-4">
-                      {category.questions.map(q => (
-                        <QuestionItem 
-                          key={q.id}
-                          question={q}
-                          value={formData.answers[q.id]}
-                          onChange={handleAnswerChange}
-                        />
-                      ))}
+                                return (
+                                    <button
+                                        key={cat.id}
+                                        type="button"
+                                        onClick={() => handleCategorySelect(cat.id)}
+                                        disabled={isDone}
+                                        className={`p-4 rounded-xl border-2 text-left transition-all relative overflow-hidden group ${
+                                            isDone 
+                                            ? 'bg-slate-50 border-slate-200 opacity-60 cursor-not-allowed' 
+                                            : 'bg-white border-slate-200 hover:border-unair-blue hover:shadow-md'
+                                        }`}
+                                    >
+                                        <div className="flex justify-between items-start mb-2">
+                                            <h4 className={`font-bold ${isDone ? 'text-slate-500' : 'text-slate-800 group-hover:text-unair-blue'}`}>
+                                                {cat.title}
+                                            </h4>
+                                            {isDone && (
+                                                <span className="bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded flex items-center gap-1">
+                                                    <Info size={12} /> Selesai
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-sm text-slate-500 line-clamp-2">{cat.description}</p>
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
-                  </div>
-                ))}
+                ) : (
+                    <div className="bg-white rounded-xl shadow-sm p-6 sm:p-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        <div className="flex items-center justify-between border-b pb-4 mb-6">
+                            <h3 className="text-lg font-bold text-unair-blue flex items-center gap-2">
+                                <span className="bg-unair-blue text-white w-6 h-6 rounded flex items-center justify-center text-xs">2</span>
+                                {appData.categories.find(c => c.id === activeCategory)?.title}
+                            </h3>
+                            <button 
+                                type="button" 
+                                onClick={() => setActiveCategory(null)}
+                                className="text-sm text-slate-500 hover:text-unair-blue underline"
+                            >
+                                Ganti Kategori
+                            </button>
+                        </div>
+                        
+                        <p className="text-slate-500 text-sm mb-6">
+                            {appData.categories.find(c => c.id === activeCategory)?.description}
+                        </p>
+                        
+                        <div className="space-y-4">
+                            {appData.categories.find(c => c.id === activeCategory)?.questions.map(q => (
+                                <QuestionItem 
+                                    key={q.id}
+                                    question={q}
+                                    value={formData.answers[q.id]}
+                                    onChange={handleAnswerChange}
+                                />
+                            ))}
+                        </div>
+
+                        <div className="mt-8 flex justify-end">
+                            <button
+                                type="submit"
+                                className="bg-unair-yellow text-unair-blue font-bold px-8 py-3 rounded-lg hover:bg-yellow-400 transition-colors shadow-md hover:shadow-lg flex items-center gap-2"
+                            >
+                                {isLoading ? <Loader2 className="animate-spin" /> : <Send size={20} />}
+                                Kirim Laporan
+                            </button>
+                        </div>
+                    </div>
+                )}
               </section>
 
-              <div className="sticky bottom-4 z-40 bg-white/80 backdrop-blur-md p-4 rounded-xl shadow-lg border border-slate-200 flex justify-end">
-                <button
-                  type="submit"
-                  className="bg-unair-yellow text-unair-blue font-bold px-8 py-3 rounded-lg hover:bg-yellow-400 transition-colors shadow-md hover:shadow-lg flex items-center gap-2"
-                >
-                  {isLoading ? <Loader2 className="animate-spin" /> : <Send size={20} />}
-                  Kirim Laporan
-                </button>
-              </div>
+              {/* Removed old submit button from bottom */}
             </form>
           </>
         )}
