@@ -21,7 +21,6 @@ export interface FormData {
   subject: string;
   classCode: string;
   semester: string;
-  categoryId: string; // Added to track active category
   answers: Record<string, string | number>; // Changed from ratings (number only) to answers
   positiveFeedback: string;
   constructiveFeedback: string;
@@ -30,7 +29,6 @@ export interface FormData {
 export interface Submission extends FormData {
   id: string;
   timestamp: string;
-  categoryId: string; // Added to track submission per category
 }
 
 export interface Lecturer {

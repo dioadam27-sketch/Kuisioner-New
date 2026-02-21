@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { AppData, Category, Lecturer, QuestionType, Submission } from '../types';
-import { getAppData, updateCategories, updateLecturers, deleteSubmission, getApiUrl, setApiUrl } from '../services/storageService';
+import { getAppData, updateCategories, updateLecturers, deleteSubmission } from '../services/storageService';
 import { FACULTIES } from '../constants';
-import { Settings, BarChart3, Users, BookOpen, LogOut, Plus, Trash2, Save, Loader2, Download, Upload, FileSpreadsheet, AlertTriangle, X, List, AlignLeft, CheckSquare, Search, Eye, FileText, Calendar, Filter, MessageSquare, Link } from 'lucide-react';
+import { Settings, BarChart3, Users, BookOpen, LogOut, Plus, Trash2, Save, Loader2, Download, Upload, FileSpreadsheet, AlertTriangle, X, List, AlignLeft, CheckSquare, Search, Eye, FileText, Calendar, Filter, MessageSquare } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface AdminDashboardProps {
   onLogout: () => void;
 }
 
-type Tab = 'analytics' | 'questions' | 'data' | 'results' | 'settings';
+type Tab = 'analytics' | 'questions' | 'data' | 'results';
 
 // Modal State Interface
 interface ConfirmModalState {
@@ -26,9 +26,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const [activeTab, setActiveTab] = useState<Tab>('questions'); 
   const [isLoading, setIsLoading] = useState(true);
   
-  // Settings State
-  const [apiUrl, setApiUrlState] = useState(getApiUrl());
-
   // Local state for edits
   const [editedCategories, setEditedCategories] = useState<Category[]>([]);
   const [editedLecturers, setEditedLecturers] = useState<Lecturer[]>([]);
@@ -564,63 +561,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
             >
                 <BarChart3 size={18} /> Visualisasi Data
             </button>
-            <button 
-                onClick={() => setActiveTab('settings')}
-                className={`py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 whitespace-nowrap ${activeTab === 'settings' ? 'border-unair-blue text-unair-blue' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-            >
-                <Link size={18} /> Pengaturan API
-            </button>
         </div>
       </div>
 
       <main className="max-w-6xl mx-auto px-4 py-8">
         
-        {/* --- SETTINGS TAB --- */}
-        {activeTab === 'settings' && (
-            <div className="max-w-2xl mx-auto animate-in fade-in duration-300">
-                <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200">
-                    <h3 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <Settings className="text-unair-blue" />
-                        Konfigurasi Sistem
-                    </h3>
-                    
-                    <div className="space-y-6">
-                        <div>
-                            <label className="block text-sm font-bold text-slate-700 mb-2">
-                                URL API Backend
-                            </label>
-                            <p className="text-xs text-slate-500 mb-3">
-                                Masukkan URL endpoint API PHP (misal: <code>https://domain.com/api.php</code>) atau gunakan <code>/api</code> untuk server lokal.
-                            </p>
-                            <div className="flex gap-2">
-                                <input 
-                                    type="text" 
-                                    value={apiUrl}
-                                    onChange={(e) => setApiUrlState(e.target.value)}
-                                    className="flex-1 p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-unair-blue outline-none font-mono text-sm"
-                                    placeholder="https://..."
-                                />
-                                <button 
-                                    onClick={() => {
-                                        setApiUrl(apiUrl);
-                                        alert('URL API berhasil disimpan! Halaman akan dimuat ulang.');
-                                        window.location.reload();
-                                    }}
-                                    className="bg-unair-blue text-white px-6 py-2 rounded-lg font-bold hover:bg-blue-900 transition-colors flex items-center gap-2"
-                                >
-                                    <Save size={18} /> Simpan
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-sm text-blue-800">
-                            <strong>Catatan:</strong> Perubahan URL API akan mempengaruhi seluruh aplikasi. Pastikan URL yang dimasukkan valid dan dapat diakses (CORS enabled).
-                        </div>
-                    </div>
-                </div>
-            </div>
-        )}
-
         {/* --- ANALYTICS TAB (UPDATED) --- */}
         {activeTab === 'analytics' && (
             <div className="space-y-6 animate-in fade-in duration-300">
