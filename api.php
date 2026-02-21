@@ -116,8 +116,8 @@ function ensureTablesExist($conn) {
                 }
             }
         }
-    } catch (Exception $e) {
-        // Log error to a file or handle it
+    } catch (Throwable $e) {
+        // Silently continue
     }
 }
 

@@ -21,7 +21,12 @@ const apiFetch = async (action: string, method: 'GET' | 'POST' = 'GET', body?: a
     };
     if (body) options.body = JSON.stringify(body);
 
-    const res = await fetch(`${API_URL}?action=${action}`, options);
+    // Add cache busting for GET requests
+    const url = method === 'GET' 
+        ? `${API_URL}?action=${action}&t=${Date.now()}` 
+        : `${API_URL}?action=${action}`;
+
+    const res = await fetch(url, options);
     
     if (!res.ok) {
         let errorMessage = `API Error: ${res.status} ${res.statusText}`;

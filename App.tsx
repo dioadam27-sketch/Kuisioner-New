@@ -8,7 +8,7 @@ import { SEMESTERS } from './constants';
 import { FormData, AppData } from './types';
 import { getAppData, addSubmission } from './services/storageService';
 import { onDataUpdated, emitDataUpdated } from './services/socketService';
-import { Send, AlertCircle, Info, Settings, ShieldAlert, LogOut, Loader2 } from 'lucide-react';
+import { Send, AlertCircle, Info, Settings, ShieldAlert, LogOut, Loader2, ArrowLeft } from 'lucide-react';
 
 const INITIAL_FORM: FormData = {
   nip: '',
@@ -243,18 +243,28 @@ function App() {
              <div className="mx-auto bg-white w-20 h-20 rounded-full flex items-center justify-center shadow-sm mb-6">
                 <Settings className="text-slate-400" size={40} />
              </div>
-             <h2 className="text-2xl font-bold text-slate-700 mb-2">Sistem Belum Dikonfigurasi</h2>
+             <h2 className="text-2xl font-bold text-slate-700 mb-2">Kuisioner Belum Tersedia</h2>
              <p className="text-slate-500 mb-8 max-w-md mx-auto">
-               Belum ada data Dosen atau Pertanyaan yang tersedia. 
-               Silakan login sebagai Admin untuk melakukan pengaturan awal.
+               Admin belum mengatur pertanyaan kuisioner atau data pengampu. 
+               {appData.lecturers.length === 0 && <span className="block mt-2 text-red-500 font-bold">Penyebab: Data Dosen Kosong</span>}
+               {appData.categories.length === 0 && <span className="block mt-2 text-red-500 font-bold">Penyebab: Struktur Pertanyaan Kosong</span>}
              </p>
-             <button
-               onClick={() => setView('landing')}
-               className="bg-unair-blue text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-900 transition-colors inline-flex items-center gap-2"
-             >
-               <Settings size={20} />
-               Kembali ke Login Admin
-             </button>
+             <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                    onClick={() => setView('landing')}
+                    className="bg-slate-200 text-slate-700 px-6 py-3 rounded-lg font-bold hover:bg-slate-300 transition-colors inline-flex items-center gap-2"
+                >
+                    <ArrowLeft size={20} />
+                    Halaman Utama
+                </button>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="bg-unair-blue text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-900 transition-colors inline-flex items-center gap-2"
+                >
+                    <Loader2 size={20} />
+                    Refresh Data
+                </button>
+             </div>
            </div>
         ) : (
           <>
