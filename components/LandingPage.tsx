@@ -60,44 +60,34 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLecturerLogin, onAdm
     <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-[420px] p-8 relative overflow-hidden transition-all duration-300">
         
+        {/* Admin Toggle - Subtle Lock Icon */}
+        <button 
+          onClick={() => {
+            setActiveTab(activeTab === 'dosen' ? 'admin' : 'dosen');
+            setError('');
+          }}
+          className="absolute top-6 right-6 text-slate-300 hover:text-unair-blue transition-colors p-2 rounded-lg hover:bg-slate-50"
+          title={activeTab === 'dosen' ? "Admin Login" : "Kembali ke Login Dosen"}
+        >
+          <Lock size={18} />
+        </button>
+
         {/* Top Decoration */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-16 h-16 bg-unair-blue rounded-xl flex items-center justify-center shadow-lg shadow-blue-900/20 mb-6">
             <BarChart3 className="text-white" size={32} />
           </div>
           
-          {activeTab === 'dosen' && (
-             <span className="bg-unair-yellow/20 text-unair-yellow text-xs font-bold px-3 py-1 rounded-full mb-3 border border-yellow-200">
-               KHUSUS DOSEN
-             </span>
-          )}
+          <span className={`text-xs font-bold px-3 py-1 rounded-full mb-3 border ${
+            activeTab === 'dosen' 
+              ? 'bg-unair-yellow/20 text-unair-yellow border-yellow-200' 
+              : 'bg-slate-100 text-slate-500 border-slate-200'
+          }`}>
+            {activeTab === 'dosen' ? 'KHUSUS DOSEN' : 'MODE ADMIN'}
+          </span>
 
           <h1 className="text-2xl font-bold text-slate-800 text-center">Kuesioner PDB</h1>
           <p className="text-slate-500 text-sm text-center mt-1">Sistem Monitoring & Evaluasi Perkuliahan</p>
-        </div>
-
-        {/* Tabs */}
-        <div className="bg-slate-100 p-1 rounded-xl flex mb-8">
-          <button
-            onClick={() => { setActiveTab('dosen'); setError(''); setFoundLecturer(null); setNip(''); }}
-            className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
-              activeTab === 'dosen' 
-                ? 'bg-white text-slate-800 shadow-sm' 
-                : 'text-slate-500 hover:text-slate-600'
-            }`}
-          >
-            Dosen
-          </button>
-          <button
-            onClick={() => { setActiveTab('admin'); setError(''); }}
-            className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
-              activeTab === 'admin' 
-                ? 'bg-white text-slate-800 shadow-sm' 
-                : 'text-slate-500 hover:text-slate-600'
-            }`}
-          >
-            Admin
-          </button>
         </div>
 
         {/* Form Content */}
@@ -178,6 +168,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onLecturerLogin, onAdm
           </div>
         ) : (
             <form onSubmit={handleAdminSubmit} className="space-y-6">
+                <div className="text-center mb-2">
+                    <h2 className="text-lg font-bold text-slate-800">Login Administrator</h2>
+                    <p className="text-xs text-slate-500">Masukkan kode akses untuk melanjutkan</p>
+                </div>
                 <div>
                     <label className="block text-xs font-bold text-slate-700 uppercase mb-2 ml-1">Kode Akses</label>
                     <div className="relative">

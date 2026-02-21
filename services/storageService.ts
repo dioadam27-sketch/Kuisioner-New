@@ -1,7 +1,7 @@
 import { AppData, Submission, Category, Lecturer, Subject } from '../types';
 import { MOCK_LECTURERS, SUBJECTS, QUESTION_CATEGORIES } from '../constants';
 
-// Production API URL - Integrated
+// Production API URL - External PHP
 const API_URL = 'https://pkkii.pendidikan.unair.ac.id/monev/api.php'; 
 
 // Fallback data if API fails or for initial state
@@ -23,26 +23,14 @@ const apiFetch = async (action: string, method: 'GET' | 'POST' = 'GET', body?: a
 
     const res = await fetch(`${API_URL}?action=${action}`, options);
     
-    // Robustness Check: Ensure response is actually JSON (catch PHP HTML errors)
-    const contentType = res.headers.get("content-type");
-    if (contentType && contentType.indexOf("application/json") === -1) {
-        const text = await res.text();
-        // Log the HTML error to console for debugging
-        console.error("API returned non-JSON response:", text); 
-        throw new Error(`Server Error (PHP): ${text.substring(0, 100)}...`);
-    }
-
     if (!res.ok) {
-        // Try to parse detailed error from JSON body
         let errorMessage = `API Error: ${res.status} ${res.statusText}`;
         try {
             const errorBody = await res.json();
             if (errorBody.error) {
-                errorMessage = `API Error: ${errorBody.error}`;
+                errorMessage = errorBody.error;
             }
-        } catch (e) {
-            // If parsing failed, keep the generic message
-        }
+        } catch (e) { }
         throw new Error(errorMessage);
     }
     
@@ -58,7 +46,6 @@ const apiFetch = async (action: string, method: 'GET' | 'POST' = 'GET', body?: a
 export const getAppData = async (): Promise<AppData> => {
   try {
     const data = await apiFetch('get_app_data');
-    // Ensure structure matches AppData even if DB returns partials
     return {
       lecturers: data.lecturers || [],
       subjects: data.subjects || [],
@@ -67,23 +54,14 @@ export const getAppData = async (): Promise<AppData> => {
     };
   } catch (e) {
     console.warn("Failed to fetch from API, using fallback/local data.");
-    // Fallback to local storage for offline capability or dev
     const stored = localStorage.getItem('monev_pdb_data_fallback');
     return stored ? JSON.parse(stored) : INITIAL_DATA;
   }
 };
 
 export const addSubmission = async (submission: Omit<Submission, 'id' | 'timestamp'>) => {
-  // Optimistic ID generation
-  const newSubmission: Submission = {
-    ...submission,
-    id: crypto.randomUUID(),
-    timestamp: new Date().toISOString()
-  };
-
   try {
-    await apiFetch('add_submission', 'POST', newSubmission);
-    // Success - Data saved to server
+    await apiFetch('add_submission', 'POST', submission);
   } catch (e: any) {
     console.error("Submission failed:", e);
     alert(`Gagal menyimpan ke server: ${e.message}`);

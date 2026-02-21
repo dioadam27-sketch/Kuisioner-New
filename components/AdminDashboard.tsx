@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { AppData, Category, Lecturer, QuestionType, Submission } from '../types';
 import { getAppData, updateCategories, updateLecturers, deleteSubmission } from '../services/storageService';
+import { emitDataUpdated, onDataUpdated } from '../services/socketService';
 import { FACULTIES } from '../constants';
 import { Settings, BarChart3, Users, BookOpen, LogOut, Plus, Trash2, Save, Loader2, Download, Upload, FileSpreadsheet, AlertTriangle, X, List, AlignLeft, CheckSquare, Search, Eye, FileText, Calendar, Filter, MessageSquare } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -30,6 +31,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
   const [editedCategories, setEditedCategories] = useState<Category[]>([]);
   const [editedLecturers, setEditedLecturers] = useState<Lecturer[]>([]);
   
+  // Track if user has manually edited something
+  const [isCategoriesDirty, setIsCategoriesDirty] = useState(false);
+  const [isLecturersDirty, setIsLecturersDirty] = useState(false);
+  
   // State for Results Tab
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSubmission, setSelectedSubmission] = useState<Submission | null>(null);
@@ -51,26 +56,52 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
 
   useEffect(() => {
     loadData();
-  }, []);
 
-  const loadData = async () => {
-    setIsLoading(true);
+    // Listen for real-time updates from other devices
+    const cleanup = onDataUpdated(() => {
+      console.log("Admin: Syncing data from other device...");
+      loadData(true); // Silent update
+    });
+
+    // Warning when leaving with unsaved changes
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isCategoriesDirty || isLecturersDirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      cleanup();
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [isCategoriesDirty, isLecturersDirty]);
+
+  const loadData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     const d = await getAppData();
     setData(d);
-    setEditedCategories(d.categories);
-    setEditedLecturers(d.lecturers);
+    
+    // Only overwrite local edits if they haven't been modified by the user
+    if (!isCategoriesDirty || !silent) {
+        setEditedCategories(d.categories);
+    }
+    if (!isLecturersDirty || !silent) {
+        setEditedLecturers(d.lecturers);
+    }
 
     // Default tab logic
-    if (d.submissions.length > 0) {
+    if (d.submissions.length > 0 && !silent) {
         setActiveTab('analytics');
     }
     
     // Set default selected question for analytics
-    if (d.categories.length > 0 && d.categories[0].questions.length > 0) {
+    if (d.categories.length > 0 && d.categories[0].questions.length > 0 && !selectedQuestionId) {
         setSelectedQuestionId(d.categories[0].questions[0].id);
     }
 
-    setIsLoading(false);
+    if (!silent) setIsLoading(false);
   };
 
   // Helper to trigger modal
@@ -93,6 +124,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         "Perubahan pada kategori dan pertanyaan akan disimpan ke sistem. Pastikan tipe pertanyaan dan opsi (jika ada) sudah benar.",
         async () => {
             await updateCategories(editedCategories);
+            setIsCategoriesDirty(false); // Reset dirty state
+            emitDataUpdated(); // Notify other devices
             alert('Pengaturan pertanyaan berhasil disimpan!');
             loadData();
         }
@@ -110,6 +143,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         `Anda akan menyimpan ${editedLecturers.length} data dosen. Database lama akan diperbarui.`,
         async () => {
             await updateLecturers(editedLecturers);
+            setIsLecturersDirty(false); // Reset dirty state
+            emitDataUpdated(); // Notify other devices
             alert('Data Dosen berhasil disimpan!');
             loadData();
         }
@@ -123,6 +158,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         async () => {
             try {
                 await deleteSubmission(id);
+                emitDataUpdated(); // Notify other devices
                 loadData();
                 alert('Laporan berhasil dihapus.');
             } catch (error) {
@@ -261,6 +297,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         ]
     };
     setEditedCategories([...editedCategories, newCategory]);
+    setIsCategoriesDirty(true);
   };
 
   const handleDeleteCategory = (index: number) => {
@@ -270,6 +307,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         () => {
             const newCats = editedCategories.filter((_, i) => i !== index);
             setEditedCategories(newCats);
+            setIsCategoriesDirty(true);
         },
         'danger'
     );
@@ -283,6 +321,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         newCats[catIdx].questions[qIdx].options = ["Opsi 1", "Opsi 2"];
     }
     setEditedCategories(newCats);
+    setIsCategoriesDirty(true);
   };
 
   const handleOptionChange = (catIdx: number, qIdx: number, optIdx: number, value: string) => {
@@ -291,6 +330,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         newCats[catIdx].questions[qIdx].options![optIdx] = value;
     }
     setEditedCategories(newCats);
+    setIsCategoriesDirty(true);
   };
 
   const handleAddOption = (catIdx: number, qIdx: number) => {
@@ -298,6 +338,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
     if (!newCats[catIdx].questions[qIdx].options) newCats[catIdx].questions[qIdx].options = [];
     newCats[catIdx].questions[qIdx].options!.push(`Opsi Baru`);
     setEditedCategories(newCats);
+    setIsCategoriesDirty(true);
   };
 
   const handleRemoveOption = (catIdx: number, qIdx: number, optIdx: number) => {
@@ -306,6 +347,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
         newCats[catIdx].questions[qIdx].options = newCats[catIdx].questions[qIdx].options!.filter((_, i) => i !== optIdx);
     }
     setEditedCategories(newCats);
+    setIsCategoriesDirty(true);
   };
 
   // --- Analysis Logic ---
@@ -820,11 +862,24 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                     <p className="text-sm text-blue-800">Atur kategori dan pertanyaan. Anda bisa memilih tipe (Likert, Pilihan Ganda, atau Isian).</p>
                     <button 
                         onClick={handleSaveCategories}
-                        className="bg-unair-blue text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-900 flex items-center gap-2"
+                        className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${
+                            isCategoriesDirty 
+                            ? 'bg-unair-yellow text-unair-blue shadow-lg scale-105 ring-4 ring-unair-yellow/20' 
+                            : 'bg-unair-blue text-white hover:bg-blue-900'
+                        }`}
                     >
-                        <Save size={16} /> Simpan Struktur
+                        <Save size={16} /> {isCategoriesDirty ? 'SIMPAN PERUBAHAN' : 'Simpan Struktur'}
                     </button>
                 </div>
+
+                {isCategoriesDirty && (
+                    <div className="bg-unair-yellow/10 border border-unair-yellow/30 p-3 rounded-lg flex items-center gap-3 animate-pulse">
+                        <AlertTriangle className="text-unair-yellow" size={20} />
+                        <p className="text-sm font-bold text-unair-blue">
+                            Ada perubahan yang belum disimpan! Klik tombol kuning di atas untuk menyimpan ke database.
+                        </p>
+                    </div>
+                )}
 
                 {/* EMPTY STATE - Show Button when 0 categories */}
                 {editedCategories.length === 0 && (
@@ -856,6 +911,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                     const newCats = [...editedCategories];
                                     newCats[catIdx].title = e.target.value;
                                     setEditedCategories(newCats);
+                                    setIsCategoriesDirty(true);
                                 }}
                             />
                             <input 
@@ -866,6 +922,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                     const newCats = [...editedCategories];
                                     newCats[catIdx].description = e.target.value;
                                     setEditedCategories(newCats);
+                                    setIsCategoriesDirty(true);
                                 }}
                             />
                             
@@ -894,6 +951,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                                     const newCats = [...editedCategories];
                                                     newCats[catIdx].questions[qIdx].text = e.target.value;
                                                     setEditedCategories(newCats);
+                                                    setIsCategoriesDirty(true);
                                                 }}
                                             />
                                             <div className="w-40 shrink-0">
@@ -955,6 +1013,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                             const newCats = [...editedCategories];
                                             newCats[catIdx].questions = newCats[catIdx].questions.filter((_, i) => i !== qIdx);
                                             setEditedCategories(newCats);
+                                            setIsCategoriesDirty(true);
                                         }}
                                         className="text-red-300 hover:text-red-600 p-2"
                                         title="Hapus Pertanyaan"
@@ -973,6 +1032,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout }) => {
                                         type: 'likert' // Default type
                                     });
                                     setEditedCategories(newCats);
+                                    setIsCategoriesDirty(true);
                                 }}
                                 className="text-sm text-unair-blue font-semibold hover:underline flex items-center gap-1 mt-2"
                             >

@@ -24,8 +24,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 require_once 'config.php';
 
 // --- AUTO MIGRATION CHECK FUNCTION ---
-function ensureColumnsExist($conn) {
+function ensureTablesExist($conn) {
     try {
+        // Create tables if they don't exist
+        $conn->exec("CREATE TABLE IF NOT EXISTS `lecturers` (
+            `id` varchar(50) NOT NULL,
+            `nip` varchar(50) DEFAULT NULL,
+            `name` varchar(255) NOT NULL,
+            `department` varchar(255) NOT NULL,
+            PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $conn->exec("CREATE TABLE IF NOT EXISTS `subjects` (
+            `id` varchar(50) NOT NULL,
+            `name` varchar(255) NOT NULL,
+            PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $conn->exec("CREATE TABLE IF NOT EXISTS `categories` (
+            `id` varchar(50) NOT NULL,
+            `title` varchar(255) NOT NULL,
+            `description` text DEFAULT NULL,
+            `sort_order` int(11) DEFAULT 0,
+            PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $conn->exec("CREATE TABLE IF NOT EXISTS `questions` (
+            `id` varchar(50) NOT NULL,
+            `category_id` varchar(50) NOT NULL,
+            `text` text NOT NULL,
+            `sort_order` int(11) DEFAULT 0,
+            `type` varchar(20) DEFAULT 'likert',
+            `options` text DEFAULT NULL,
+            PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $conn->exec("CREATE TABLE IF NOT EXISTS `submissions` (
+            `id` varchar(50) NOT NULL,
+            `timestamp` datetime NOT NULL,
+            `nip` varchar(50) DEFAULT NULL,
+            `lecturer_name` varchar(255) NOT NULL,
+            `subject_name` varchar(255) NOT NULL,
+            `class_code` varchar(50) NOT NULL,
+            `semester` varchar(50) NOT NULL,
+            `positive_feedback` text DEFAULT NULL,
+            `constructive_feedback` text DEFAULT NULL,
+            PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $conn->exec("CREATE TABLE IF NOT EXISTS `submission_ratings` (
+            `id` int(11) NOT NULL AUTO_INCREMENT,
+            `submission_id` varchar(50) NOT NULL,
+            `question_id` varchar(50) NOT NULL,
+            `rating` int(11) NOT NULL,
+            `answer_text` text DEFAULT NULL,
+            PRIMARY KEY (`id`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
         $migrationChecks = [
             'lecturers' => [
                 'nip' => 'VARCHAR(50) DEFAULT NULL AFTER id'
@@ -47,31 +102,27 @@ function ensureColumnsExist($conn) {
         ];
 
         foreach ($migrationChecks as $table => $cols) {
-            // Check if table exists
-            $tCheck = $conn->query("SHOW TABLES LIKE '$table'");
-            if ($tCheck->rowCount() > 0) {
-                // Get existing columns
-                $existingCols = [];
-                $cStmt = $conn->query("SHOW COLUMNS FROM `$table`");
-                while ($row = $cStmt->fetch(PDO::FETCH_ASSOC)) {
-                    $existingCols[] = $row['Field'];
-                }
+            // Get existing columns
+            $existingCols = [];
+            $cStmt = $conn->query("SHOW COLUMNS FROM `$table`");
+            while ($row = $cStmt->fetch(PDO::FETCH_ASSOC)) {
+                $existingCols[] = $row['Field'];
+            }
 
-                // Add missing columns
-                foreach ($cols as $colName => $colDef) {
-                    if (!in_array($colName, $existingCols)) {
-                        $conn->exec("ALTER TABLE `$table` ADD `$colName` $colDef");
-                    }
+            // Add missing columns
+            foreach ($cols as $colName => $colDef) {
+                if (!in_array($colName, $existingCols)) {
+                    $conn->exec("ALTER TABLE `$table` ADD `$colName` $colDef");
                 }
             }
         }
     } catch (Exception $e) {
-        // Silently continue if migration fails
+        // Log error to a file or handle it
     }
 }
 
 // Run migration check on every request to be safe
-ensureColumnsExist($conn);
+ensureTablesExist($conn);
 
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';

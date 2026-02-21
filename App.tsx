@@ -7,6 +7,7 @@ import { LandingPage } from './components/LandingPage';
 import { SEMESTERS } from './constants';
 import { FormData, AppData } from './types';
 import { getAppData, addSubmission } from './services/storageService';
+import { onDataUpdated, emitDataUpdated } from './services/socketService';
 import { Send, AlertCircle, Info, Settings, ShieldAlert, LogOut, Loader2 } from 'lucide-react';
 
 const INITIAL_FORM: FormData = {
@@ -46,11 +47,11 @@ function App() {
   const [lecturerDepartment, setLecturerDepartment] = useState('');
 
   useEffect(() => {
-    const fetchData = async () => {
-        setIsLoading(true);
+    const fetchData = async (silent = false) => {
+        if (!silent) setIsLoading(true);
         const data = await getAppData();
         setAppData(data);
-        setIsLoading(false);
+        if (!silent) setIsLoading(false);
         
         // Ensure subject matches API data if available AND not already set by persistence
         const savedForm = localStorage.getItem(STORAGE_KEY_FORM);
@@ -60,6 +61,14 @@ function App() {
     };
 
     fetchData();
+
+    // Listen for real-time updates from other devices
+    const cleanup = onDataUpdated(() => {
+      console.log("Syncing data from other device...");
+      fetchData(true); // Silent update
+    });
+
+    return cleanup;
   }, []); // Only on mount
 
   // Persist state to localStorage
@@ -133,6 +142,7 @@ function App() {
     e.preventDefault();
     if (validate()) {
       await addSubmission(formData);
+      emitDataUpdated(); // Notify other devices
       setView('success');
       window.scrollTo(0, 0);
     } else {
