@@ -192,6 +192,22 @@ if ($method === 'POST' && $action === 'add_submission') {
     try {
         $conn->beginTransaction();
 
+        // DUPLICATE CHECK
+        $checkStmt = $conn->prepare("SELECT id FROM submissions WHERE nip = ? AND subject_name = ? AND class_code = ? AND semester = ?");
+        $checkStmt->execute([
+            $data['nip'] ?? '',
+            $data['subject'],
+            $data['classCode'],
+            $data['semester']
+        ]);
+
+        if ($checkStmt->fetch()) {
+            $conn->rollBack();
+            http_response_code(409); // Conflict
+            echo json_encode(['error' => 'Anda sudah mengisi kuisioner.']);
+            exit;
+        }
+
         $stmt = $conn->prepare("INSERT INTO submissions (id, timestamp, nip, lecturer_name, subject_name, class_code, semester, positive_feedback, constructive_feedback) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
         
         $id = $data['id'] ?? uniqid('sub_');

@@ -22,9 +22,20 @@ const INITIAL_FORM: FormData = {
 
 type ViewState = 'landing' | 'form' | 'success' | 'admin-dashboard';
 
+const STORAGE_KEY_VIEW = 'monev_pdb_view';
+const STORAGE_KEY_FORM = 'monev_pdb_form_data';
+
 function App() {
-  const [view, setView] = useState<ViewState>('landing');
-  const [formData, setFormData] = useState<FormData>(INITIAL_FORM);
+  const [view, setView] = useState<ViewState>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_VIEW);
+    return (saved as ViewState) || 'landing';
+  });
+  
+  const [formData, setFormData] = useState<FormData>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY_FORM);
+    return saved ? JSON.parse(saved) : INITIAL_FORM;
+  });
+
   const [errors, setErrors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -41,15 +52,24 @@ function App() {
         setAppData(data);
         setIsLoading(false);
         
-        // Ensure subject matches API data if available
-        if (data.subjects.length > 0) {
+        // Ensure subject matches API data if available AND not already set by persistence
+        const savedForm = localStorage.getItem(STORAGE_KEY_FORM);
+        if (data.subjects.length > 0 && !savedForm) {
             setFormData(prev => ({ ...prev, subject: data.subjects[0].name }));
         }
     };
 
     fetchData();
-  }, [view]); 
+  }, []); // Only on mount
 
+  // Persist state to localStorage
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_VIEW, view);
+  }, [view]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_FORM, JSON.stringify(formData));
+  }, [formData]);
   // --- Handlers ---
 
   const handleLecturerLogin = (nip: string, lecturerName?: string, department?: string) => {
@@ -91,6 +111,18 @@ function App() {
         if (answeredQuestions < totalQuestions) {
              newErrors.push(`Harap lengkapi semua pertanyaan (${answeredQuestions}/${totalQuestions} terisi).`);
         }
+
+        // DUPLICATE CHECK: One submission per NIP + Subject + Class + Semester
+        const isDuplicate = appData.submissions.some(s => 
+            s.nip === formData.nip && 
+            s.subject === formData.subject && 
+            s.semester === formData.semester &&
+            s.classCode === formData.classCode
+        );
+
+        if (isDuplicate) {
+            newErrors.push(`Anda sudah mengisi kuisioner.`);
+        }
     }
     
     setErrors(newErrors);
@@ -109,10 +141,18 @@ function App() {
   };
 
   const handleReset = () => {
+    localStorage.removeItem(STORAGE_KEY_VIEW);
+    localStorage.removeItem(STORAGE_KEY_FORM);
     setFormData(INITIAL_FORM);
     setView('landing'); 
     setErrors([]);
     window.scrollTo(0, 0);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem(STORAGE_KEY_VIEW);
+    localStorage.removeItem(STORAGE_KEY_FORM);
+    setView('landing');
   };
 
   // --- RENDERING ---
@@ -136,7 +176,7 @@ function App() {
   }
 
   if (view === 'admin-dashboard') {
-    return <AdminDashboard onLogout={() => setView('landing')} />;
+    return <AdminDashboard onLogout={handleLogout} />;
   }
 
   const isConfigured = appData.lecturers.length > 0 && appData.categories.length > 0;
@@ -171,7 +211,7 @@ function App() {
              </div>
            </div>
            <button 
-             onClick={() => setView('landing')}
+             onClick={handleLogout}
              className="flex items-center gap-2 text-sm bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg transition-colors"
            >
              <LogOut size={14} /> Keluar
